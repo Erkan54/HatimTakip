@@ -64,3 +64,25 @@ Firestore Security Rules, eşzamanlı aralık çakışmasını ve tek ayetin ayn
 ## Kur’an verisi ve lisans
 
 `tools/build_quran.py` kaynaklardan ayetleri birebir eşler ve aralık bütünlüğünü kontrol eder. Metin uygulama çalışırken internetten alınmaz. Ayrıntılar [assets/quran/LICENSES.md](assets/quran/LICENSES.md) dosyasındadır. Türkçe meal yayına çıkmadan önce yayınevi/transkript şartlarına göre tekrar gözden geçirilmelidir.
+
+## Kaynak yapısı ve hızlı başlangıç
+
+| Konum | Sorumluluk |
+| --- | --- |
+| [`lib/`](lib/) | Flutter ekranları, tema, Kur'an verisi ve Firestore akışı |
+| [`assets/`](assets/) | Yerel ayet/meal verileri ve lisanslı yazı tipleri |
+| [`firestore.rules`](firestore.rules) | Veri erişimi ve ilerleme doğrulama kuralları |
+| [`test/`](test/) | Arayüz, ayet kapsama ve harita kontrolleri |
+| [`tools/integration/`](tools/integration/) | Firebase emülatörü için entegrasyon yardımcıları |
+| `app/`, kök Gradle dosyaları | Depoda korunan Android/Kotlin başlangıç iskeleti |
+
+Aktif mobil arayüz Flutter `lib/` katmanındadır; Android çalıştırma hedefi `android/` klasörüdür. Firebase kurulumu için yukarıdaki adımları tamamladıktan sonra:
+
+```sh
+git clone https://github.com/Erkan54/HatimTakip.git
+cd HatimTakip
+flutter pub get
+flutter run
+```
+
+Firebase istemci tanımlayıcıları erişim yetkisi sağlamaz; erişim Firestore Security Rules ve App Check ayarlarıyla yönetilir. Mevcut veri/lisans ve Spark planı sınırlamaları yukarıda açıklanmıştır.
