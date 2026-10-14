@@ -11,16 +11,20 @@ import 'repositories.dart';
 import 'screens.dart';
 import 'firebase_options.dart';
 import 'app_design.dart';
+import 'settings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(['Tanzil Quran Text — Simple / Imlaei'],
+        await rootBundle.loadString('assets/quran/TANZIL-LICENSE.txt'));
     for (final font in ['Amiri', 'Manrope']) {
       yield LicenseEntryWithLineBreaks(
           [font], await rootBundle.loadString('assets/fonts/$font-OFL.txt'));
     }
   });
   final quran = await Quran.load();
+  final settings = await AppSettings.load();
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
     const emulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
@@ -37,6 +41,7 @@ Future<void> main() async {
       );
     }
     runApp(HatimApp(
+        settings: settings,
         repo: HatimRepository(
             FirebaseFirestore.instance, FirebaseAuth.instance, quran),
         quran: quran));
@@ -56,16 +61,37 @@ Future<void> main() async {
   }
 }
 
-class HatimApp extends StatelessWidget {
-  const HatimApp({super.key, required this.repo, required this.quran});
+class HatimApp extends StatefulWidget {
+  const HatimApp(
+      {super.key, required this.repo, required this.quran, this.settings});
   final HatimRepository repo;
   final Quran quran;
+  final AppSettings? settings;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'Hatim Halkası',
-        debugShowCheckedModeBanner: false,
-        theme: buildAppTheme(),
-        home: HomeScreen(repo: repo, quran: quran),
-      );
+  State<HatimApp> createState() => _HatimAppState();
+}
+
+class _HatimAppState extends State<HatimApp> {
+  late final settings = widget.settings ?? AppSettings();
+
+  @override
+  void dispose() {
+    settings.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SettingsScope(
+      settings: settings,
+      child: ListenableBuilder(
+          listenable: settings,
+          builder: (context, _) => MaterialApp(
+                title: 'Hatim Zinciri',
+                debugShowCheckedModeBanner: false,
+                theme: buildAppTheme(),
+                darkTheme: buildAppTheme(brightness: Brightness.dark),
+                themeMode: settings.theme,
+                home: HomeScreen(repo: widget.repo, quran: widget.quran),
+              )));
 }

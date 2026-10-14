@@ -46,6 +46,15 @@ class HatimRepository {
     });
   }
 
+  /// Updates only the profile name; historical group/reading records stay intact.
+  Future<void> updateName(String name) async {
+    final cleaned = name.trim();
+    if (cleaned.isEmpty || cleaned.length > 40) {
+      throw ArgumentError('Adınızı giriniz (en fazla 40 karakter).');
+    }
+    await me.update({'name': cleaned});
+  }
+
   String _randomCode() {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final random = Random.secure();
@@ -155,7 +164,8 @@ class HatimRepository {
     await db.runTransaction((tx) async {
       final ref = group(id);
       final snap = await tx.get(ref);
-      if (snap.data()?['owner'] != uid || snap.data()?['round'] != currentRound) {
+      if (snap.data()?['owner'] != uid ||
+          snap.data()?['round'] != currentRound) {
         throw StateError('Yeni hatmi yalnızca kurucu başlatabilir.');
       }
       tx.update(ref, {

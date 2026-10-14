@@ -1,4 +1,4 @@
-# Hatim Halkası
+# Hatim Zinciri
 
 Android öncelikli Flutter uygulaması. Firebase Anonymous Authentication ve Cloud Firestore kullanır. Kur’an metni, Türkçe meal, 604 Medine Mushafı sayfası ve 30 cüz eşlemesi cihazda `assets/quran/verses.json` içinde bulunur. Cloud Functions, Cloud Run, reklam ve ödeme bileşeni yoktur.
 
@@ -9,6 +9,22 @@ mat altın detaylar ve cihazda saklanan Manrope / Amiri yazı tipleri. Yazı tip
 kaynakları ve lisansları `assets/fonts/README.md` dosyasında bulunur.
 Ana ekranda harita kısayolu yoktur; okuma ekranındaki harita simgesi kullanılır.
 Haritadaki arama simgesi sayfa numarasıyla yerel seçim yapar, veritabanını okumaz.
+
+Tamamlanan arayüz yenilemesi:
+
+- **Okuma:** kalıcı meal tercihi, A−/A+ ile kalıcı Arapça yazı boyutu, Türkçe sure adları, ayet sonu işareti, segmentli ilerleme ve aralık sonunda **Devam et / Bitir** seçimi. Yeni aralık yalnızca Devam et ile ayrılır.
+- **Grup takibi ve okuma:** 604 sayfa için cüz satırlı ızgara ve 30 cüz kartı, boş/kısmi/tamamlanan durumları, tamamlanan cüz/sayfa sayıları, sayfa araması ve yeni işaretlerde Geri al. Gruptaki **Kur’an oku** veya seçilen sayfa/cüzdeki **Bu bölümden oku** eylemi sınırsız sayfa okuması açar. Bu ekranda 10 ayetlik rezervasyon ve ayet onayı yoktur; sayfalar arasında ilerlenir, meal ve yazı boyutu ayarlanabilir. Evde veya uygulamada okunan sayfa/cüzler grupta elle işaretlenir; okuma ekranı otomatik tamamlandı kaydı oluşturmaz. Paylaşım ve tireli davet kodu uygulama çubuğundadır.
+- **Ayarlar:** açık/koyu tema, meal, yazı boyutu, titreşim, isim değiştirme ve lisanslar. İlk kurulumda açık tema kullanılır; sistem teması izlenmez. Eski sistem tercihi açık temaya geçer, elle seçilmiş koyu tema korunur. Görünüm tercihleri yalnızca cihazdaki SharedPreferences içinde tutulur.
+- **Ortak harita:** mevcut tek-belge okuması korunur. 604 sayfa birer kez çizilir; cihazdaki dört ortak cüz sayfası ilk ayetinin cüz satırına yerleştirilir, detayda iki cüz de gösterilir.
+- **Android açılışı:** sistem temasından bağımsız açık açılış zemini ve halka/kitap simgesi; Android 12+ splash ve uyarlanabilir launcher ikonu. Kaydedilmiş görünüm Flutter açılınca uygulanır.
+
+`screens.dart` dışa aktarma dosyasıdır. Ekranlar `home_screen.dart`,
+`onboarding_screen.dart`, `reader_screen.dart`, `group_screen.dart`,
+`settings_screen.dart` olarak ayrılmıştır. Ortak harita `hatim_map_view.dart`,
+ızgara `page_grid.dart`, hareket araçları `motion.dart` içindedir.
+Özel gruptan açılan yerel sayfa okuyucusu `group_reader_screen.dart` içindedir.
+Animasyonlar azaltılmış hareket tercihine uyar; küçük/yatay ekran ve büyük yazı
+senaryoları test edilir.
 
 `flutter test` küçük ekran, yatay kullanım, büyütülmüş yazı, okuma akışı ve harita
 seçimini yerel verilerle kontrol eder. Görsel önizlemeler oluşturmak için:
@@ -46,6 +62,27 @@ flutter run --dart-define=USE_FIREBASE_EMULATOR=true
 
 `flutter analyze`, `flutter test` ve `flutter build apk --debug` yerel doğrulama komutlarıdır. Gerçek Firebase projesi veya Android cihazı olmadan gerçek servis akışı doğrulanmış sayılmaz.
 
+Profil isim değişikliği `users/{uid}.name` alanına tek yazma yapar. Kurallar yalnızca
+hesabın sahibine 1–40 karakterlik adı güncelleme izni verir; grup/okuma kayıtları ve
+`createdAt` korunur. Eski üyelik/işaret kayıtlarında o zamanki ad kalabilir. Bu
+özelliği canlı projede kullanmadan önce güncel `firestore.rules` dosyasını yayınlayın:
+
+```powershell
+npx firebase-tools deploy --only firestore:rules --project PROJE_ID
+```
+
+Kuralları ve okuma senaryolarını gerçek projeyi kullanmadan doğrulamak için:
+
+```powershell
+cd tools/integration
+npm ci
+cd ../..
+npx firebase-tools emulators:exec --only auth,firestore --project demo-hatim-halkasi "node tools/integration/run-checks.mjs"
+```
+
+Bu kontrol isim güncelleme yetkilerini, okuma rezervasyonunu/devralmayı,
+sayfa tamamlamasını ve hatmin son aralığını kapsar; canlı dağıtım yapmaz.
+
 ## Veri ve maliyet modeli
 
 - Ortak hatim 10 ayetlik 624 aralığa bölünür. Bir kullanıcı aralığı aldığı veya ayet onayladığı andan itibaren 30 dakika boyunca o aralık ona ayrılır; bu sırada başka kullanıcıya farklı bir aralık verilir. Süre dolduğunda eksik aralık öncelikle yeniden dağıtılır ve yeni kullanıcı son onaylanan ayetten sonraki ayetle devam eder. Her “Sonraki Ayet” onayı, yalnızca atanmış aralığın `next` alanını bir artırır. Son ayette ortak sayaç bir kez artar. Bir cihaz kapanırsa onaylanmış `next` korunur.
@@ -63,7 +100,22 @@ Firestore Security Rules, eşzamanlı aralık çakışmasını ve tek ayetin ayn
 
 ## Kur’an verisi ve lisans
 
+Okuma ekranında Tanzil **Simple / Imlaei** harekeli imlâî Arapça metin kullanılır.
+Amiri yazı tipi cihazda saklanır; vasıl elifi ve Osmanlı imlasına özgü sıfır
+işaretleri bu kaynak metinde yoktur. Normal harekeler ve kaynakta bulunan küçük
+elif korunur. Metin elle işaret silerek dönüştürülmez. Sayfa/cüz numaraları mevcut
+Medine Mushafı ayet eşlemesine dayanır; görünüm satır satır mushaf kopyası değildir.
+
 `tools/build_quran.py` kaynaklardan ayetleri birebir eşler ve aralık bütünlüğünü kontrol eder. Metin uygulama çalışırken internetten alınmaz. Ayrıntılar [assets/quran/LICENSES.md](assets/quran/LICENSES.md) dosyasındadır. Türkçe meal yayına çıkmadan önce yayınevi/transkript şartlarına göre tekrar gözden geçirilmelidir.
+
+Yalnızca Arapça kaynağını yenilemek ve kaynağa karşı doğrulamak için:
+
+```powershell
+python tools/build_quran.py --update-arabic
+python tools/build_quran.py --verify
+```
+
+Kaynak SHA-256 özeti sabitlenmiştir; beklenmeyen kaynak değişikliğinde işlem durur.
 
 ## Kaynak yapısı ve hızlı başlangıç
 

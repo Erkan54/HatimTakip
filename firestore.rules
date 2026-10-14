@@ -53,7 +53,9 @@ service cloud.firestore {
         && request.resource.data.name.size() <= 40 && request.resource.data.groups == []
         && request.resource.data.createdAt == request.time;
       allow update: if signed() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['groups', 'activeRound', 'activeChunk'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'groups', 'activeRound', 'activeChunk'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 40
         && request.resource.data.groups is list && request.resource.data.groups.size() <= 30
         && (request.resource.data.keys().hasAll(['activeRound', 'activeChunk']) == false ||
           (request.resource.data.activeRound is int && request.resource.data.activeChunk is int

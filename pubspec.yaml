@@ -1,5 +1,5 @@
 name: hatim_halkasi
-description: "A new Flutter project."
+description: "Ortak hatim, ayet ilerlemesi ve özel grup takibi sunan Flutter uygulaması."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -65,6 +65,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/quran/verses.json
+    - assets/quran/TANZIL-LICENSE.txt
     - assets/fonts/Amiri-OFL.txt
     - assets/fonts/Manrope-OFL.txt
   fonts:

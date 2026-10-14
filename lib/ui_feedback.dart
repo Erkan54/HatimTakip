@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 String friendly(Object error) {
-  debugPrint('Hatim Halkası işlem hatası: $error');
+  debugPrint('Hatim Zinciri işlem hatası: $error');
   if (error is ArgumentError || error is StateError) {
     return error
         .toString()
