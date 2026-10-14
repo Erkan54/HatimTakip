@@ -1,0 +1,11 @@
+{
+  "indexes": [{
+    "collectionGroup": "chunks",
+    "queryScope": "COLLECTION",
+    "fields": [
+      {"fieldPath": "done", "order": "ASCENDING"},
+      {"fieldPath": "leaseUntil", "order": "ASCENDING"}
+    ]
+  }],
+  "fieldOverrides": []
+}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "311642359589",
+    "project_id": "hatimhalkasi-66bba",
+    "storage_bucket": "hatimhalkasi-66bba.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:311642359589:android:de056afae928f234903ccc",
+        "android_client_info": {
+          "package_name": "com.example.hatim_halkasi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCtvqo1WRL-ALdNVmNjS58nFqx9I-e34KY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

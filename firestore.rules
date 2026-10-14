@@ -1,0 +1,225 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signed() { return request.auth != null; }
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function groupPath(id) { return /databases/$(database)/documents/groups/$(id); }
+    function memberPath(id, uid) { return /databases/$(database)/documents/groups/$(id)/members/$(uid); }
+    function chunkPath(round, index) { return /databases/$(database)/documents/publicRounds/$(round)/chunks/$(index); }
+    function statePath() { return /databases/$(database)/documents/public/state; }
+    function member(id) { return signed() && exists(memberPath(id, request.auth.uid)); }
+    function endFor(index) { return index == 623 ? 6236 : (index + 1) * 10; }
+    // Exclusive end verse for each of the 604 bundled Quran pages, padded to four digits.
+    // Generated from assets/quran/verses.json; page p occupies [pageEnd(p-1), pageEnd(p)).
+    function pageEnd(page) {
+      let ends = '0007001200230031003600440055006400680076008300900095010001080112011901260133014101480152016001700176018301880193019702030209021702220226023102370240024402520255025902630266027102760281028802890293030203080315032203300338034503540363037003760384039304010408041404250433044104460450045804660473047904870493049905040507051205160519052605300537054405520558056705720579058405870594059806060614062006270633'
+                + '0640064706550663066806710674067806820686069207000705071007140719072607330739074507510758076407720777078207890797080708160824083308410848085708620870087908830890089909070913092009260931093509400946095409650976098409910997100510111021102710351041104910581074108410911097110311091113111711241132114111491160116811761185119312001205121212211229123512411248125512611266127112751282128912961303130713141321'
+                + '1328133413411346135213571364137013781384138913971406141714251434144214521461147014781485149215011510151815261535154415541561157015811590160016101618162616331639164816591665167416821691169917071712172017251735174117491755176017681774178317921802181718331853187218921907191519271935194319551965197319801988199420032011201920292036204620562067207820872095210421152125213321442155216021672174218521932201'
+                + '2214222322372250226122752288230123142326234523602385239924122424243524462461247324832493250725182527254025552564257325842595260026102618262526332641265026592667267326902700271527322747276227772791280128112818282228272834284428492852285728662875288728982910292229322951297129923015304330683091311531383159317231813194320332143222323532473257326532733280328732953302331133223329333633463354336333703378'
+                + '3385339234033414342434333441345034593469348034883497350335143523353335393548355535633568357635833587359536063613362036283637364536543663367136783690369837043717373237453759377537883812383938643890391439413970398639964012403140534063406840794089409841054114412541324140414941584166417341824191419942104218422942384247425642644272428242874294430343164323433543474358437243854398441444324453447344864495'
+                + '4505451545244530453845454556456445744583459245984606461146164623463046454665468147054726474947664784481048284852487348954917494149684995502950555078508650935099510451105115512551295135514251505155516151685177518551925199520852175222522952365241525352675286531353315357538554145429544754605475549455125542557055965616564156725702572757585800582958545882590959315963599360166043607260986125613761556176'
+                + '6193620762216236';
+      return int(ends[(page - 1) * 4:page * 4]);
+    }
+    function pageChunkDone(round, index, end) {
+      return getAfter(chunkPath(round, index)).data.next >=
+        (end < (index + 1) * 10 ? end : (index + 1) * 10);
+    }
+    function validCompletedPage() {
+      let before = resource.data.get('completedPages', []);
+      let after = request.resource.data.completedPages;
+      let page = request.resource.data.lastCompletedPage;
+      let start = page == 1 ? 0 : pageEnd(page - 1);
+      let end = pageEnd(page);
+      let first = int(start / 10);
+      let last = int((end - 1) / 10);
+      return page is int && page >= 1 && page <= 604
+        && before is list && after is list && !before.hasAny([page])
+        && after.size() == before.size() + 1 && after.size() <= 604
+        && after.hasAll(before) && after.hasAny([page])
+        && pageChunkDone(resource.data.round, first, end)
+        && (first + 1 > last || pageChunkDone(resource.data.round, first + 1, end))
+        && (first + 2 > last || pageChunkDone(resource.data.round, first + 2, end))
+        && (first + 3 > last || pageChunkDone(resource.data.round, first + 3, end))
+        && (first + 4 > last || pageChunkDone(resource.data.round, first + 4, end));
+    }
+
+    match /users/{uid} {
+      allow get: if signed() && request.auth.uid == uid;
+      allow list: if false;
+      allow create: if signed() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'createdAt', 'groups'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 40 && request.resource.data.groups == []
+        && request.resource.data.createdAt == request.time;
+      allow update: if signed() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['groups', 'activeRound', 'activeChunk'])
+        && request.resource.data.groups is list && request.resource.data.groups.size() <= 30
+        && (request.resource.data.keys().hasAll(['activeRound', 'activeChunk']) == false ||
+          (request.resource.data.activeRound is int && request.resource.data.activeChunk is int
+            && request.resource.data.activeChunk >= 0 && request.resource.data.activeChunk < 624));
+      allow delete: if false;
+    }
+
+    match /invites/{code} {
+      allow get: if signed() && code.matches('^[A-HJ-NP-Z2-9]{16}$');
+      allow list, update, delete: if false;
+      allow create: if signed() && code.matches('^[A-HJ-NP-Z2-9]{16}$')
+        && request.resource.data.keys().hasOnly(['groupId', 'owner'])
+        && request.resource.data.owner == request.auth.uid
+        && getAfter(groupPath(request.resource.data.groupId)).data.owner == request.auth.uid
+        && getAfter(groupPath(request.resource.data.groupId)).data.inviteCode == code;
+    }
+
+    match /groups/{id} {
+      allow get, list: if member(id);
+      allow create: if signed() && request.resource.data.keys().hasOnly([
+          'name', 'owner', 'inviteCode', 'round', 'completedHatims', 'createdAt'])
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 70
+        && request.resource.data.round == 1 && request.resource.data.completedHatims == 0
+        && request.resource.data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.groupId == id
+        && getAfter(memberPath(id, request.auth.uid)).data.uid == request.auth.uid;
+      // A group owner may close a round only after its progress document says complete.
+      // The completion claim is self-reported; no trusted backend is available on Spark.
+      allow update: if signed() && resource.data.owner == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['round', 'completedHatims', 'lastCompletedAt'])
+        && request.resource.data.round == resource.data.round + 1
+        && request.resource.data.completedHatims == resource.data.completedHatims + 1
+        && request.resource.data.lastCompletedAt == request.time;
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow get: if signed() && (request.auth.uid == uid || member(id));
+        allow list: if member(id);
+        allow create: if signed() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'joinedAt', 'inviteCode'])
+          && request.resource.data.uid == uid
+          && request.resource.data.name == get(userPath(uid)).data.name
+          && request.resource.data.joinedAt == request.time
+          && request.resource.data.inviteCode == getAfter(groupPath(id)).data.inviteCode
+          && getAfter(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.groupId == id;
+        allow update, delete: if false;
+      }
+
+      match /rounds/{round}/progress/{document} {
+        allow get, list: if member(id);
+        allow create: if member(id) && document == 'main'
+          && int(round) == get(groupPath(id)).data.round
+          && request.resource.data.keys().hasOnly(['marks', 'updatedAt', 'lastKey'])
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.lastKey.matches('^(p([1-9]|[1-9][0-9]|[1-5][0-9][0-9]|60[0-4])|j([1-9]|[12][0-9]|30))$')
+          && request.resource.data.marks is map
+          && request.resource.data.marks.keys().size() == 1
+          && request.resource.data.marks[request.resource.data.lastKey].uid == request.auth.uid
+          && request.resource.data.marks[request.resource.data.lastKey].name == get(userPath(request.auth.uid)).data.name;
+        allow update: if member(id) && document == 'main'
+          && int(round) == get(groupPath(id)).data.round
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['marks', 'updatedAt', 'lastKey'])
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.lastKey.matches('^(p([1-9]|[1-9][0-9]|[1-5][0-9][0-9]|60[0-4])|j([1-9]|[12][0-9]|30))$')
+          && request.resource.data.marks.keys().size() <= 634
+          && request.resource.data.marks.diff(resource.data.marks).affectedKeys().hasOnly([request.resource.data.lastKey])
+          && request.resource.data.marks.diff(resource.data.marks).affectedKeys().size() == 1
+          && (request.resource.data.marks.keys().hasAny([request.resource.data.lastKey])
+            ? (!resource.data.marks.keys().hasAny([request.resource.data.lastKey])
+              && request.resource.data.marks[request.resource.data.lastKey].uid == request.auth.uid
+              && request.resource.data.marks[request.resource.data.lastKey].name == get(userPath(request.auth.uid)).data.name)
+            : (resource.data.marks[request.resource.data.lastKey].uid == request.auth.uid
+              || get(groupPath(id)).data.owner == request.auth.uid));
+        allow delete: if false;
+      }
+    }
+
+    match /public/{document} {
+      allow get: if signed() && document == 'state';
+      allow list, create, delete: if false;
+      allow update: if signed() && document == 'state' && (
+        // Allocate one never-used chunk, atomically with its creation.
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nextChunk'])
+          && resource.data.nextChunk < 624
+          && request.resource.data.nextChunk == resource.data.nextChunk + 1
+          && !exists(chunkPath(resource.data.round, resource.data.nextChunk))
+          && getAfter(chunkPath(resource.data.round, resource.data.nextChunk)).data.owner == request.auth.uid)
+        ||
+        // Record a page only when all chunks touching it have confirmed its verses.
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completedPages', 'lastCompletedPage'])
+          && validCompletedPage())
+        ||
+        // One unique completed chunk increments the round counter.
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'completedChunks', 'lastCompletedChunk', 'completedPages', 'lastCompletedPage'])
+          && resource.data.completedChunks < 623
+          && request.resource.data.completedChunks == resource.data.completedChunks + 1
+          && request.resource.data.lastCompletedChunk is int
+          && get(chunkPath(resource.data.round, request.resource.data.lastCompletedChunk)).data.next
+            == endFor(request.resource.data.lastCompletedChunk) - 1
+          && getAfter(chunkPath(resource.data.round, request.resource.data.lastCompletedChunk)).data.next
+            == endFor(request.resource.data.lastCompletedChunk)
+          && getAfter(chunkPath(resource.data.round, request.resource.data.lastCompletedChunk)).data.owner == request.auth.uid
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                'completedPages', 'lastCompletedPage']) || validCompletedPage()))
+        ||
+        // The 624th unique chunk rolls over exactly once.
+        (resource.data.completedChunks == 623 && resource.data.nextChunk == 624
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'round', 'nextChunk', 'completedChunks', 'completedHatims', 'lastCompletedChunk',
+            'completedPages', 'lastCompletedPage'])
+          && request.resource.data.round == resource.data.round + 1
+          && request.resource.data.nextChunk == 0
+          && request.resource.data.completedChunks == 0
+          && request.resource.data.completedHatims == resource.data.completedHatims + 1
+          && request.resource.data.lastCompletedChunk is int
+          && request.resource.data.completedPages == []
+          && request.resource.data.lastCompletedPage == 0
+          && get(chunkPath(resource.data.round, request.resource.data.lastCompletedChunk)).data.next
+            == endFor(request.resource.data.lastCompletedChunk) - 1
+          && getAfter(chunkPath(resource.data.round, request.resource.data.lastCompletedChunk)).data.next
+            == endFor(request.resource.data.lastCompletedChunk)
+          && getAfter(chunkPath(resource.data.round, request.resource.data.lastCompletedChunk)).data.owner == request.auth.uid)
+      );
+    }
+
+    match /publicRounds/{round}/chunks/{index} {
+      // Public progress is readable so page completion can inspect adjacent chunks.
+      allow get: if signed();
+      allow list: if signed() && request.query.limit <= 3;
+      allow create: if signed() && int(round) == get(statePath()).data.round
+        && int(index) == get(statePath()).data.nextChunk
+        && request.resource.data.keys().hasOnly(['index', 'next', 'end', 'owner', 'leaseUntil', 'done'])
+        && request.resource.data.index == int(index)
+        && request.resource.data.next == int(index) * 10
+        && request.resource.data.end == endFor(int(index))
+        && request.resource.data.owner == request.auth.uid && request.resource.data.done == false
+        && request.resource.data.leaseUntil > request.time
+        && request.resource.data.leaseUntil <= request.time + duration.value(31, 'm')
+        && getAfter(statePath()).data.nextChunk == int(index) + 1;
+      allow update: if signed() && int(round) == get(statePath()).data.round
+        && resource.data.done == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['owner', 'leaseUntil', 'next', 'done'])
+        && request.resource.data.leaseUntil > request.time
+        && request.resource.data.leaseUntil <= request.time + duration.value(31, 'm')
+        && (
+          // Expired leases can be reclaimed without changing confirmed progress.
+          (resource.data.leaseUntil < request.time
+            && request.resource.data.owner == request.auth.uid
+            && request.resource.data.next == resource.data.next
+            && request.resource.data.done == false)
+          ||
+          // Only the holder can confirm exactly the next verse.
+          (resource.data.owner == request.auth.uid
+            && resource.data.leaseUntil >= request.time
+            && request.resource.data.owner == resource.data.owner
+            && request.resource.data.next == resource.data.next + 1
+            && request.resource.data.next <= resource.data.end
+            && request.resource.data.done == (request.resource.data.next == resource.data.end)
+            && (request.resource.data.done == false
+              || getAfter(statePath()).data.round > int(round)
+              || getAfter(statePath()).data.completedChunks == get(statePath()).data.completedChunks + 1))
+        );
+      allow delete: if false;
+    }
+  }
+}
